@@ -10,6 +10,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import { config } from './config/environment.js';
+import pool from './config/database.js';
 import jobRoutes from './routes/jobs.js';
 import notificationRoutes from './routes/notifications.js';
 import feedRoutes from './routes/feeds.js';
@@ -62,7 +63,6 @@ app.use('/api/feeds', feedRoutes);
 app.use('/api/research', researchRoutes);
 
 // Health
-import pool from './config/database.js';
 app.get('/api/health', async (_req, res) => {
   let dbStatus = 'disconnected';
   try { await pool.query('SELECT 1'); dbStatus = 'connected'; } catch { dbStatus = 'error'; }
