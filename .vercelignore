@@ -1,0 +1,8 @@
+# Dev dependencies & cache
+node_modules
+.env
+.env.local
+server/.env
+
+# Local dev only
+server/src/scripts

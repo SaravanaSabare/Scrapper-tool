@@ -1,24 +1,32 @@
 import CheerioScraper from './cheerio-scraper.js';
-import PuppeteerScraper from './puppeteer-scraper.js';
 import GenericScraper from './generic-scraper.js';
 import { Job, Notice } from '../models/index.js';
 import { createItemId } from '../utils/ids.js';
+
+// Puppeteer is optional — not available in serverless environments (Vercel)
+let PuppeteerScraper = null;
+try {
+  const mod = await import('./puppeteer-scraper.js');
+  PuppeteerScraper = mod.default ?? mod.PuppeteerScraper ?? null;
+} catch {
+  console.warn('Puppeteer not available — Cheerio-only mode.');
+}
 
 export const ScraperService = {
   GenericScraper,
 
   async scrapeJobsWithFallback() {
     try {
-      // Try Cheerio first (faster)
       const jobs = await CheerioScraper.scrapeJobs();
       return jobs;
     } catch (err) {
-      console.warn('⚠️ Cheerio scraper failed, falling back to Puppeteer...');
+      if (!PuppeteerScraper) throw err;
+      console.warn('Cheerio scraper failed, falling back to Puppeteer...');
       try {
         const jobs = await PuppeteerScraper.scrapeJobs();
         return jobs;
       } catch (fallbackErr) {
-        console.error('❌ Both scrapers failed');
+        console.error('Both scrapers failed');
         throw fallbackErr;
       }
     }
@@ -26,16 +34,16 @@ export const ScraperService = {
 
   async scrapeNoticesWithFallback() {
     try {
-      // Try Cheerio first (faster)
       const notices = await CheerioScraper.scrapeNotices();
       return notices;
     } catch (err) {
-      console.warn('⚠️ Cheerio scraper failed, falling back to Puppeteer...');
+      if (!PuppeteerScraper) throw err;
+      console.warn('Cheerio scraper failed, falling back to Puppeteer...');
       try {
         const notices = await PuppeteerScraper.scrapeNotices();
         return notices;
       } catch (fallbackErr) {
-        console.error('❌ Both scrapers failed');
+        console.error('Both scrapers failed');
         throw fallbackErr;
       }
     }

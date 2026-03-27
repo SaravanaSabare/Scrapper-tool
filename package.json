@@ -1,0 +1,12 @@
+{
+  "name": "scrapper-tool",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Universal web scraper — Vercel monorepo root",
+  "type": "module",
+  "scripts": {
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "build": "cd client && npm run build"
+  }
+}
