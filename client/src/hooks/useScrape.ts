@@ -1,19 +1,25 @@
 import { useCallback, useState } from 'react'
 import { scrapeItems } from '../services/api/items'
-import type { ScrapeStats } from '../types/scraper'
+import type { ItemRecord, ScrapeStats } from '../types/scraper'
 
 const emptyStats: ScrapeStats = {
   newJobsCount: 0,
   newNoticesCount: 0,
   itemsFound: 0,
-  newItemsSaved: 0
+  newItemsSaved: 0,
+}
+
+interface ScrapeResult {
+  stats: ScrapeStats
+  items: ItemRecord[]
 }
 
 interface ScrapeHookResult {
   stats: ScrapeStats
   loading: boolean
   error: Error | null
-  trigger: (url?: string) => Promise<ScrapeStats>
+  /** Trigger a scrape.  Resolves with enriched items[] + stats. */
+  trigger: (url?: string) => Promise<ScrapeResult>
 }
 
 export function useScrape(): ScrapeHookResult {
@@ -21,21 +27,21 @@ export function useScrape(): ScrapeHookResult {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
 
-  const trigger = useCallback(async (url = '') => {
+  const trigger = useCallback(async (url = ''): Promise<ScrapeResult> => {
     setLoading(true)
     setError(null)
     try {
+      // scrapeItems now returns { items: ItemRecord[], itemsFound: number }
       const data = await scrapeItems(url)
+      const items: ItemRecord[] = data?.items ?? []
       const normalized: ScrapeStats = {
-        newJobsCount: data?.newJobsCount ?? 0,
-        newNoticesCount: data?.newNoticesCount ?? 0,
-        itemsFound:
-          data?.itemsFound ?? (data?.newJobsCount ?? 0) + (data?.newNoticesCount ?? 0),
-        newItemsSaved:
-          data?.newItemsSaved ?? (data?.newJobsCount ?? 0) + (data?.newNoticesCount ?? 0)
+        newJobsCount: 0,
+        newNoticesCount: 0,
+        itemsFound: data?.itemsFound ?? items.length,
+        newItemsSaved: 0,
       }
       setStats(normalized)
-      return normalized
+      return { stats: normalized, items }
     } catch (err) {
       setError(err as Error)
       throw err
@@ -44,10 +50,5 @@ export function useScrape(): ScrapeHookResult {
     }
   }, [])
 
-  return {
-    stats,
-    loading,
-    error,
-    trigger
-  }
+  return { stats, loading, error, trigger }
 }

@@ -41,10 +41,16 @@ router.post('/scrape', async (req, res) => {
       if (!trimmedUrl) {
         return res.status(400).json({ success: false, error: 'URL cannot be empty' });
       }
-      console.log('Dynamic scrape triggered for URL:', trimmedUrl);
-      const result = await ScraperService.GenericScraper.scrapeUrl(trimmedUrl);
-      return res.json({ success: true, message: 'Successfully scraped', data: result });
+      console.log('Session scrape triggered for URL:', trimmedUrl);
+      // GenericScraper now returns enriched items[] — no DB writes
+      const items = await ScraperService.GenericScraper.scrapeUrl(trimmedUrl);
+      return res.json({
+        success: true,
+        message: 'Successfully scraped',
+        data: { items, itemsFound: items.length }
+      });
     }
+    // Default feed scrape (still writes to Supabase for background intelligence)
     console.log('Manual default scrape triggered via API');
     const result = await ScraperService.scrapeAndSave();
     res.json({ success: true, message: 'Default scrape completed', data: result });

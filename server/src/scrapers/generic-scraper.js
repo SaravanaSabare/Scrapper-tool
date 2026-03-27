@@ -1,107 +1,90 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import { Job } from '../models/index.js';
+import { analyzeItem } from '../services/ai.js';
 import { createItemId } from '../utils/ids.js';
 
 export const GenericScraper = {
+  /**
+   * Scrape a URL, run AI analysis on each item, and return the enriched
+   * array.  NO Supabase writes � results are session-only on the client.
+   */
   async scrapeUrl(url) {
+    const rawUrl = (url || '').trim();
+    if (!rawUrl) throw new Error('URL is required');
+
+    const normalizedUrl = rawUrl.match(/^https?:\/\//i) ? rawUrl : `https://${rawUrl}`;
+
+    let siteDetails;
     try {
-      const rawUrl = (url || '').trim();
-      const normalizedUrl = rawUrl.match(/^https?:\/\//i) ? rawUrl : `https://${rawUrl}`;
-
-      if (!rawUrl) {
-        throw new Error('URL is required');
-      }
-
-      console.log(`\n🔍 Scraping a custom URL: ${normalizedUrl}...`);
-
-      let siteDetails;
-      try {
-        siteDetails = new URL(normalizedUrl);
-      } catch (err) {
-        throw new Error('Invalid URL format');
-      }
-
-      const response = await axios.get(normalizedUrl, {
-        timeout: 30000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-      });
-
-      const $ = cheerio.load(response.data);
-      const items = [];
-  const baseUrl = siteDetails.origin;
-  const sitename = siteDetails.hostname.replace('www.', '');
-
-      // Heuristic approach: look for all links within reasonable contextual elements
-      // Typically articles/jobs are inside h1, h2, h3, or a generic item container.
-      $('a').each((index, element) => {
-        const $el = $(element);
-        const link = $el.attr('href');
-        const text = $el.text().trim();
-        
-        // Filter out junk links
-        if (!link || !text || text.split(' ').length < 3 || link.startsWith('javascript:')) return;
-
-        // Determine description by looking at parent/sibling text
-        let description = $el.parent().text().replace(text, '').trim().slice(0, 200);
-        if (!description) {
-          description = $el.parent().parent().text().replace(text, '').trim().slice(0, 200) || text;
-        }
-
-        // Format link
-        const finalLink = link.startsWith('http') ? link : (link.startsWith('/') ? `${baseUrl}${link}` : `${baseUrl}/${link}`);
-
-        items.push({
-          job_id: `custom-${Buffer.from(finalLink).toString('base64').slice(0, 15)}-${index}`,
-          title: text,
-          // Storing the scraped site name so we know where it came from
-          company: `Scraped from ${sitename}`,
-          location: 'Web',
-          description: description,
-          salary: '',
-          job_type: 'Custom Scrape',
-          posted_date: new Date(),
-          link: finalLink
-        });
-      });
-
-      // Deduplicate by link
-      const uniqueItems = Array.from(new Map(items.map(item => [item.link, item])).values())
-        // Limit to top 50 to avoid database spam from giant pages
-        .slice(0, 50);
-
-  console.log(`✅ Found ${uniqueItems.length} unique items on ${normalizedUrl}`);
-
-      // Save to database instantly
-      let newItemsCount = 0;
-      for (const itemData of uniqueItems) {
-        try {
-          const item_id = createItemId({
-            title: itemData.title,
-            link: itemData.link,
-            posted_date: itemData.posted_date
-          });
-          const existing = await Job.findByItemId(item_id);
-          if (!existing) {
-            await Job.create({ ...itemData, item_id });
-            newItemsCount++;
-          }
-        } catch (err) {
-          console.error(`Error saving custom item ${itemData.job_id}:`, err.message);
-        }
-      }
-
-      return {
-        url: normalizedUrl,
-        itemsFound: uniqueItems.length,
-        newItemsSaved: newItemsCount
-      };
-    } catch (err) {
-      console.error(`❌ Custom scrape error for ${url}:`, err.message);
-      throw new Error(`Failed to scrape ${url}: ${err.message}`);
+      siteDetails = new URL(normalizedUrl);
+    } catch {
+      throw new Error('Invalid URL format');
     }
+
+    console.log(`\n?? Session scrape: ${normalizedUrl}`);
+
+    const response = await axios.get(normalizedUrl, {
+      timeout: 30000,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    });
+
+    const $ = cheerio.load(response.data);
+    const baseUrl = siteDetails.origin;
+    const sitename = siteDetails.hostname.replace('www.', '');
+    const raw = [];
+
+    $('a').each((_i, element) => {
+      const $el = $(element);
+      const href = $el.attr('href');
+      const text = $el.text().trim();
+
+      if (!href || !text || text.split(' ').length < 3 || href.startsWith('javascript:')) return;
+
+      let description = $el.parent().text().replace(text, '').trim().slice(0, 300);
+      if (!description) {
+        description = $el.parent().parent().text().replace(text, '').trim().slice(0, 300) || text;
+      }
+
+      const finalLink = href.startsWith('http')
+        ? href
+        : href.startsWith('/')
+          ? `${baseUrl}${href}`
+          : `${baseUrl}/${href}`;
+
+      raw.push({
+        title: text,
+        company: `Scraped from ${sitename}`,
+        location: 'Web',
+        description,
+        salary: '',
+        job_type: 'Custom Scrape',
+        source: sitename,
+        posted_date: new Date().toISOString(),
+        link: finalLink,
+      });
+    });
+
+    // Deduplicate by link, cap at 50
+    const unique = Array.from(new Map(raw.map(i => [i.link, i])).values()).slice(0, 50);
+    console.log(`   Found ${unique.length} unique items � enriching with AI...`);
+
+    // Enrich each item with AI in small batches to respect rate limits
+    const BATCH = 5;
+    const enriched = [];
+    for (let i = 0; i < unique.length; i += BATCH) {
+      const batch = unique.slice(i, i + BATCH);
+      const results = await Promise.all(
+        batch.map(async (item) => {
+          const ai = await analyzeItem({ title: item.title, description: item.description });
+          const item_id = createItemId({ title: item.title, link: item.link, posted_date: item.posted_date });
+          return { ...item, item_id, ai };
+        })
+      );
+      enriched.push(...results);
+    }
+
+    console.log(`? Session scrape complete � ${enriched.length} items enriched.`);
+    return enriched;
   }
 };
 

@@ -12,17 +12,19 @@ const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 }
 interface ItemsPageProps {
   items: ItemRecord[]
   feeds: FeedRecord[]
-  onDeleteItem?: (id: string) => Promise<void>
+  onRemoveItem?: (id: string) => void
+  onClearAll?: () => void
+  onOpenResearch?: () => void
 }
 
-export default function ItemsPage({ items, feeds, onDeleteItem }: ItemsPageProps) {
-  const [query, setQuery] = useState('')
-  const [sourceFeedId, setSourceFeedId] = useState('all')
+export default function ItemsPage({ items, feeds, onRemoveItem, onClearAll, onOpenResearch }: ItemsPageProps) {
+  const [query, setQuery]                   = useState('')
+  const [sourceFeedId, setSourceFeedId]     = useState('all')
   const [priorityFilter, setPriorityFilter] = useState('all')
-  const [sortKey, setSortKey] = useState<SortKey>('newest')
-  const [selectedItem, setSelectedItem] = useState<ItemRecord | null>(null)
+  const [sortKey, setSortKey]               = useState<SortKey>('newest')
+  const [selectedItem, setSelectedItem]     = useState<ItemRecord | null>(null)
 
-  // Build feed lookup: feed_id â†’ name
+  // Build feed lookup: feed_id ? name
   const feedMap = useMemo(() => {
     const m: Record<string, string> = {}
     for (const f of feeds) m[f.feed_id] = f.name
@@ -32,25 +34,23 @@ export default function ItemsPage({ items, feeds, onDeleteItem }: ItemsPageProps
   const filtered = useMemo(() => {
     let result = items
 
-    // Source filter
     if (sourceFeedId !== 'all') {
       result = result.filter((item) => item.feed_id === sourceFeedId)
     }
 
-    // Priority filter
     if (priorityFilter !== 'all') {
       result = result.filter((item) => (item.ai?.priority || 'low').toLowerCase() === priorityFilter)
     }
 
-    // Search
     if (query.trim()) {
       const lower = query.toLowerCase()
       result = result.filter((item) =>
-        `${item.title} ${item.description} ${item.job_type} ${item.company} ${item.ai?.tags?.join(' ')} ${item.ai?.category}`.toLowerCase().includes(lower)
+        `${item.title} ${item.description} ${item.job_type} ${item.company} ${item.ai?.tags?.join(' ')} ${item.ai?.category}`
+          .toLowerCase()
+          .includes(lower)
       )
     }
 
-    // Sort
     result = [...result].sort((a, b) => {
       if (sortKey === 'oldest') {
         return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
@@ -60,20 +60,17 @@ export default function ItemsPage({ items, feeds, onDeleteItem }: ItemsPageProps
         const pb = PRIORITY_ORDER[(b.ai?.priority || 'low').toLowerCase()] ?? 2
         return pa - pb
       }
-      // newest
       return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
     })
 
     return result
   }, [items, query, sourceFeedId, priorityFilter, sortKey])
 
-  // Only show sources that appear in actual items
   const activeSources = useMemo(() => {
     const ids = new Set(items.map((i) => i.feed_id).filter(Boolean))
     return feeds.filter((f) => ids.has(f.feed_id))
   }, [items, feeds])
 
-  // Priority stats
   const priorityCounts = useMemo(() => {
     const counts = { high: 0, medium: 0, low: 0 }
     for (const item of items) {
@@ -87,8 +84,42 @@ export default function ItemsPage({ items, feeds, onDeleteItem }: ItemsPageProps
     exportItemsCsv(filtered, `scraped-items-${new Date().toISOString().slice(0, 10)}.csv`)
   }, [filtered])
 
+  const handleRemove = useCallback((id: string) => {
+    onRemoveItem?.(id)
+    // Close drawer if the deleted item is selected
+    setSelectedItem((prev) => (prev && (prev.item_id ?? (prev as any).id) === id ? null : prev))
+  }, [onRemoveItem])
+
   return (
     <div className="space-y-5">
+      {/* Session banner */}
+      {items.length > 0 && (
+        <div className="flex items-center justify-between rounded-md border border-(--border) bg-(--surface-elevated) px-4 py-2.5">
+          <span className="font-mono-accent text-xs text-(--text-faint)">
+            ?? Session — <strong className="text-(--text-muted)">{items.length} item{items.length === 1 ? '' : 's'}</strong> loaded.
+            &nbsp;Not saved. Refresh page to start over.
+          </span>
+          <div className="flex items-center gap-2">
+            {onOpenResearch && (
+              <button
+                onClick={onOpenResearch}
+                className="font-mono-accent rounded-md border border-(--accent)/40 bg-(--accent-soft) px-3 py-1 text-xs text-(--accent) transition hover:opacity-80"
+              >
+                ?? Research
+              </button>
+            )}
+            {onClearAll && (
+              <button
+                onClick={onClearAll}
+                className="font-mono-accent rounded-md border border-(--border) px-3 py-1 text-xs text-(--text-faint) transition hover:border-(--danger)/40 hover:text-(--danger)"
+              >
+                Clear session
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Header row */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -138,7 +169,7 @@ export default function ItemsPage({ items, feeds, onDeleteItem }: ItemsPageProps
           >
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
-            <option value="priority">Priority â†‘</option>
+            <option value="priority">Priority ?</option>
           </select>
 
           {/* Source filter */}
@@ -156,19 +187,14 @@ export default function ItemsPage({ items, feeds, onDeleteItem }: ItemsPageProps
             </select>
           )}
 
-          <SearchInput
-            value={query}
-            onChange={setQuery}
-            placeholder="Search items, tagsâ€¦"
-          />
+          <SearchInput value={query} onChange={setQuery} placeholder="Search items, tags…" />
 
-          {/* Export CSV */}
           {filtered.length > 0 && (
             <button
               onClick={handleExport}
               className="flex items-center gap-1.5 rounded-md border border-(--border) bg-(--surface-elevated) px-3 py-2 font-mono-accent text-xs text-(--text-muted) transition hover:border-(--accent)/40 hover:text-(--accent)"
             >
-              â¬‡ Export CSV
+              ? Export CSV
             </button>
           )}
         </div>
@@ -177,27 +203,44 @@ export default function ItemsPage({ items, feeds, onDeleteItem }: ItemsPageProps
       {filtered.length === 0 ? (
         <EmptyState
           title="no items found"
-          description={query || sourceFeedId !== 'all' || priorityFilter !== 'all' ? 'Try a different filter or search term.' : 'Trigger a scrape to populate items.'}
-          icon="â—Œ"
+          description={
+            query || sourceFeedId !== 'all' || priorityFilter !== 'all'
+              ? 'Try a different filter or search term.'
+              : 'Trigger a scrape to load items into this session.'
+          }
+          icon="?"
         />
       ) : (
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((item) => (
-            <ItemCard
-              key={item.id ?? item.item_id}
-              item={item}
-              feedName={item.feed_id ? feedMap[item.feed_id] : undefined}
-              onClick={() => setSelectedItem(item)}
-            />
-          ))}
+          {filtered.map((item) => {
+            const id = item.item_id ?? (item as any).id
+            return (
+              <div key={id} className="relative group">
+                <ItemCard
+                  item={item}
+                  feedName={item.feed_id ? feedMap[item.feed_id] : undefined}
+                  onClick={() => setSelectedItem(item)}
+                />
+                {/* Remove button — appears on hover */}
+                {onRemoveItem && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleRemove(id) }}
+                    title="Remove from session"
+                    className="absolute right-2 top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-(--border) bg-(--surface-elevated) font-mono-accent text-[10px] text-(--text-faint) opacity-0 transition-all group-hover:opacity-100 hover:border-(--danger)/40 hover:text-(--danger)"
+                  >
+                    ?
+                  </button>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 
-      {/* Detail drawer */}
       <ItemDrawer
         item={selectedItem}
         onClose={() => setSelectedItem(null)}
-        onDelete={onDeleteItem}
+        onDelete={selectedItem ? () => handleRemove(selectedItem.item_id ?? (selectedItem as any).id) : undefined}
       />
     </div>
   )

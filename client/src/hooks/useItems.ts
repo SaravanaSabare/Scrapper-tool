@@ -1,29 +1,30 @@
-import { useCallback } from 'react'
-import { useAsync } from './useAsync'
-import { fetchItems, deleteItem as apiDeleteItem } from '../services/api/items'
+import { useState, useCallback } from 'react'
 import type { ItemRecord } from '../types/scraper'
 
 interface ItemsHookResult {
   items: ItemRecord[]
-  loading: boolean
-  error: Error | null
-  refresh: () => Promise<ItemRecord[]>
-  deleteItem: (id: string) => Promise<void>
+  setItems: (items: ItemRecord[]) => void
+  removeItem: (id: string) => void
+  clearAll: () => void
 }
 
+/**
+ * Session-only item store.  No API fetches — items are populated by the
+ * scrape response and live entirely in React state.  Refreshing the page
+ * clears the session (by design).
+ */
 export function useItems(): ItemsHookResult {
-  const { execute, value, loading, error } = useAsync<ItemRecord[], []>(fetchItems, [], true)
+  const [items, setItemsState] = useState<ItemRecord[]>([])
 
-  const deleteItem = useCallback(async (id: string) => {
-    await apiDeleteItem(id)
-    await execute()
-  }, [execute])
+  const setItems = useCallback((next: ItemRecord[]) => {
+    setItemsState(next)
+  }, [])
 
-  return {
-    items: value || [],
-    loading,
-    error,
-    refresh: execute,
-    deleteItem,
-  }
+  const removeItem = useCallback((id: string) => {
+    setItemsState(prev => prev.filter(i => (i.item_id ?? (i as any).id) !== id))
+  }, [])
+
+  const clearAll = useCallback(() => setItemsState([]), [])
+
+  return { items, setItems, removeItem, clearAll }
 }

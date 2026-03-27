@@ -15,6 +15,7 @@ import { config, validateEnvironment } from './config/environment.js';
 import jobRoutes from './routes/jobs.js';
 import notificationRoutes from './routes/notifications.js';
 import feedRoutes from './routes/feeds.js';
+import researchRoutes from './routes/research.js';
 import { SchedulerService } from './services/scheduler.js';
 import { FeedScheduler } from './services/feed-scheduler.js';
 import pool from './config/database.js';
@@ -79,6 +80,7 @@ app.use('/api/jobs/scrape', scrapeLimiter);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/feeds', feedRoutes);
+app.use('/api/research', researchRoutes);
 
 // ─── Health ───────────────────────────────────────────────────────────────────
 app.get('/api/health', async (_req, res) => {
