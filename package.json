@@ -8,7 +8,7 @@
     "dev:server": "cd server && npm run dev",
     "dev:client": "cd client && npm run dev",
     "build": "cd client && npm run build",
-    "vercel-build": "cd client && npm install && npm run build"
+    "vercel-build": "npm install --prefix client && npm run build --prefix client"
   },
   "dependencies": {
     "axios": "^1.6.2",
