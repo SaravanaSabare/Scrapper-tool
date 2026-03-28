@@ -9,15 +9,19 @@ dotenv.config({ path: join(__dirname, '../../.env') });
 
 const { Pool } = pkg;
 
-// Supabase direct connections (port 5432) work without SSL from local dev.
-// Use SSL only in production or when the URL contains "supabase.co" via pooler port 6543.
+// Supabase pooler & direct connections both need SSL in production
+// or when connecting via pooler.supabase.com / supabase.co hostnames.
 const connectionString = process.env.DATABASE_URL || '';
-const useSSL = process.env.NODE_ENV === 'production' || connectionString.includes(':6543');
+const isSupabase = connectionString.includes('supabase');
+const useSSL = process.env.NODE_ENV === 'production' || isSupabase;
 
 const pool = new Pool({
   connectionString,
   ssl: useSSL ? { rejectUnauthorized: false } : false,
-  allowExitOnIdle: false,
+  max: 5,                     // Stay well under Supabase free-tier pool_size (15)
+  idleTimeoutMillis: 20_000,  // Close idle clients after 20s
+  connectionTimeoutMillis: 10_000,
+  allowExitOnIdle: true,      // Let serverless functions exit cleanly
 });
 
 pool.on('error', (err) => {
