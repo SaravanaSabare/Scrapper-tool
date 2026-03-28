@@ -1,6 +1,6 @@
 # Universal Web Scraper — Project Documentation
 
-> Last updated: March 2026
+> Last updated: March 28, 2026
 
 ## Overview
 
@@ -226,7 +226,53 @@ FeedScheduler (per-feed, independent intervals)
 
 ---
 
-## Storage — Supabase Postgres
+## Deployment — Vercel (Live)
+
+| Item | Value |
+|---|---|
+| Platform | Vercel (Hobby) |
+| Live URL | https://scrapper-tool-git-main-saravanas-projects-4cd03055.vercel.app |
+| Repo | github.com/SaravanaSabare/Scrapper-tool |
+| Branch | `main` (auto-deploys on push) |
+| Build command | `vercel-build` script in root `package.json` |
+| Output directory | `client/dist` |
+| Serverless entry | `api/index.js` → imports `server/src/app.js` |
+
+### How it works on Vercel
+- **Frontend**: Vite builds `client/` → `client/dist/` → served as static files
+- **Backend**: `api/index.js` exports the Express app as a Vercel Serverless Function
+- **Routing** (`vercel.json`):
+  - `/api/*` → `api/index.js` (serverless function)
+  - everything else → `index.html` (SPA client-side routing)
+- **No `buildCommand` in `vercel.json`** — Vercel picks up the `vercel-build` script from root `package.json` automatically
+
+### `vercel.json`
+```json
+{
+  "outputDirectory": "client/dist",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.js" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
+}
+```
+
+### Root `package.json` scripts
+```json
+"vercel-build": "cd client && npm install --include=dev && npx vite build"
+```
+`--include=dev` is required because Vite is a devDependency and Vercel's build environment skips devDeps by default.
+
+### Vercel Environment Variables (set in dashboard)
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | `postgresql://postgres.glmuhfjfoovfucjjckge:...@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres` |
+| `GROQ_API_KEY` | `gsk_...` (set in Vercel dashboard) |
+| `NODE_ENV` | `production` |
+
+---
+
+## Database — Supabase (Connection Pooler)
 
 All data is persisted in 4 tables:
 
@@ -239,7 +285,28 @@ All data is persisted in 4 tables:
 
 **Deduplication**: `item_id = SHA-256(title|link|posted_date)`. `Job.create()` checks existence before inserting.
 
-**Connection**: `pg.Pool` with `allowExitOnIdle: false` (prevents Node.js from exiting when the pool is idle). SSL is only enabled for production or port 6543 (Supabase pooler).
+### Why the Transaction Pooler (not Direct Connection)
+Vercel serverless functions run on AWS Lambda which is **IPv4-only**. The Supabase direct connection hostname (`db.glmuhfjfoovfucjjckge.supabase.co`) only has an **IPv6 (AAAA)** DNS record — it does not resolve on Vercel.
+
+The **Transaction Pooler** (`aws-1-ap-southeast-1.pooler.supabase.com:6543`) has IPv4 addresses and works on all platforms.
+
+| Connection type | Hostname | Port | IPv4? | Use case |
+|---|---|---|---|---|
+| Direct | `db.glmuhfjfoovfucjjckge.supabase.co` | `5432` | ❌ IPv6 only | Local dev only |
+| Session Pooler | `aws-1-ap-southeast-1.pooler.supabase.com` | `5432` | ✅ | Persistent servers |
+| **Transaction Pooler** | `aws-1-ap-southeast-1.pooler.supabase.com` | **`6543`** | ✅ | **Vercel / serverless** ← current |
+
+### `database.js` Pool Config
+```js
+new Pool({
+  connectionString,          // from DATABASE_URL env var
+  ssl: { rejectUnauthorized: false },  // always on for supabase hostnames
+  max: 5,                    // stay under free-tier pool_size of 15
+  idleTimeoutMillis: 20_000, // release idle clients after 20s
+  connectionTimeoutMillis: 10_000,
+  allowExitOnIdle: true,     // lets serverless functions exit cleanly
+})
+```
 
 ---
 
@@ -267,7 +334,7 @@ All data is persisted in 4 tables:
 |---|---|
 | Security headers | `helmet` middleware (XSS, clickjacking, MIME sniff protection) |
 | Rate limiting | 200 req/min globally; 10 req/min on `/api/jobs/scrape` |
-| CORS allowlist | Only `localhost:5173`, `localhost:4173`, `CLIENT_ORIGIN` env var |
+| CORS allowlist | `localhost:5173`, `localhost:4173`, `*.vercel.app` (wildcard), `CLIENT_ORIGIN` env var |
 | Input validation | `DELETE /:id` validates ID length + existence before query |
 | Secret management | `.env` is gitignored; `.env.example` has no real values |
 | Error messages | Stack traces hidden in `NODE_ENV=production` |
@@ -281,8 +348,8 @@ All data is persisted in 4 tables:
 `server/.env` (copy from `server/.env.example`):
 
 ```bash
-# Required
-DATABASE_URL=postgresql://user:password@host:5432/dbname
+# Required — Supabase Transaction Pooler (IPv4-compatible, required for Vercel)
+DATABASE_URL=postgresql://postgres.glmuhfjfoovfucjjckge:[PASSWORD]@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres
 
 # Optional — Groq AI (heuristic fallback used if blank)
 GROQ_API_KEY=
@@ -348,12 +415,29 @@ All components use Tailwind v4 `(--var)` syntax. **Dark mode only.**
 | Duplicate `.jsx` shim files | `client/src/**/*.jsx` | Re-export their `.tsx` counterpart — safe to delete |
 | `email.js` stub | `server/src/services/email.js` | Disabled — safe to delete |
 | `storage/` directory | `server/src/storage/` | Legacy Excel helpers — no longer used, safe to delete |
-| `migrations/` directory | `server/src/migrations/` | Run manually once; not used at runtime |
+| `migrations/` directory | `server/src/migrations/` | Run manually once to create tables; not used at runtime |
+| DB tables not verified | Supabase | `items`, `notices`, `feeds`, `ai_insights` tables may need `migrations/init.js` run against live DB |
 | Puppeteer vulnerabilities | `server/node_modules` | 6 high-severity in bundled Chromium — use `--force` audit fix only if acceptable |
 | `xlsx` dependency | `server/package.json` | No longer used after Supabase migration — safe to remove |
-| `storage/` directory | `server/src/storage/` | Legacy Excel helpers — no longer used, safe to delete |
-| `migrations/` directory | `server/src/migrations/` | Run manually once; not used at runtime |
+| Scheduler doesn't persist | `server/src/services/scheduler.js` | node-cron runs in memory — won't survive Vercel serverless cold starts; switch to Vercel Cron Jobs for production scheduling |
 
 ---
 
-> 📋 project_structure.md updated — paste to AI assistant to sync.
+## Deployment History
+
+| Commit | Description |
+|---|---|
+| `817c5d5` | Initial Vercel deploy trigger |
+| `2753432` | Fix: proper vercel.json v2 builds schema |
+| `9351946` | Fix: remove legacy version/builds |
+| `198c380` | Fix: rewrite vercel.json UTF-8 no-BOM |
+| `76304f1` | Fix: use vercel-build script, minimal vercel.json |
+| `c761432` | Fix: use npm --prefix client |
+| `a8b14e2` | Fix: call vite directly via full path |
+| `fed0a8f` | Fix: cd into client dir, use npx vite with --include=dev |
+| `0ee9bfe` | Fix: correct case-sensitive import App.css (Linux) |
+| `42b5ac1` | Fix: transaction pooler with SSL, max 5 connections |
+
+---
+
+> 📋 PROJECT.md last synced: March 28, 2026
