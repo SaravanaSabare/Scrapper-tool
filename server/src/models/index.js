@@ -323,6 +323,19 @@ export const Feed = {
 
   async delete(id) {
     await pool.query('DELETE FROM feeds WHERE feed_id = $1', [id]);
+  },
+
+  /** Return a map of feed_id → item count from the items table */
+  async getItemCounts() {
+    const { rows } = await pool.query(
+      `SELECT feed_id, COUNT(*)::int AS item_count
+       FROM items
+       WHERE feed_id IS NOT NULL
+       GROUP BY feed_id`
+    );
+    const counts = {};
+    for (const r of rows) counts[r.feed_id] = r.item_count;
+    return counts;
   }
 };
 

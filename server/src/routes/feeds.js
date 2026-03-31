@@ -8,7 +8,7 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const feeds = await Feed.findAll();
-    const counts = FeedScheduler.getItemCounts();
+    const counts = await Feed.getItemCounts();          // DB query, not in-memory
     const data = feeds.map((f) => ({ ...f, item_count: counts[f.feed_id] ?? 0 }));
     res.json({ success: true, data, count: data.length });
   } catch (err) {
