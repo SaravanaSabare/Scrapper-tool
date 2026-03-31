@@ -22,6 +22,11 @@ export default function FeedsPage() {
   const [interval, setInterval] = useState(30)
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState('')
+  const [expandedFeedId, setExpandedFeedId] = useState<string | null>(null)
+
+  const handleToggleExpand = useCallback((feedId: string) => {
+    setExpandedFeedId((prev) => (prev === feedId ? null : feedId))
+  }, [])
 
   const handleAdd = useCallback(async () => {
     const trimName = name.trim()
@@ -174,9 +179,11 @@ export default function FeedsPage() {
                 key={feed.feed_id}
                 feed={feed}
                 isScraping={scrapingId === feed.feed_id}
+                isExpanded={expandedFeedId === feed.feed_id}
                 onToggle={toggleFeed}
                 onScrapeNow={scrapeOneFeed}
                 onDelete={removeFeed}
+                onToggleExpand={handleToggleExpand}
               />
             ))}
           </div>

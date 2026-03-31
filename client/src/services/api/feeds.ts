@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { FeedRecord } from '../../types/scraper'
+import type { FeedRecord, ItemRecord } from '../../types/scraper'
 
 interface ApiResponse<T> {
   success: boolean
@@ -37,5 +37,10 @@ export async function scrapeFeedNow(feedId: string): Promise<{ feedId: string; n
   const { data } = await apiClient.post<ApiResponse<{ feedId: string; newCount: number }>>(
     `/feeds/${feedId}/scrape`
   )
+  return data.data
+}
+
+export async function fetchFeedItems(feedId: string): Promise<ItemRecord[]> {
+  const { data } = await apiClient.get<ApiResponse<ItemRecord[]>>(`/feeds/${feedId}/items`)
   return data.data
 }

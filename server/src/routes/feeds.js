@@ -1,5 +1,5 @@
 import express from 'express';
-import { Feed } from '../models/index.js';
+import { Feed, Job } from '../models/index.js';
 import { FeedScheduler } from '../services/feed-scheduler.js';
 
 const router = express.Router();
@@ -51,6 +51,16 @@ router.delete('/:id', async (req, res) => {
     FeedScheduler.cancelFeed(req.params.id);
     await Feed.delete(req.params.id);
     res.json({ success: true, message: 'Feed deleted' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/feeds/:id/items — list items scraped by this feed
+router.get('/:id/items', async (req, res) => {
+  try {
+    const items = await Job.findByFeedId(req.params.id);
+    res.json({ success: true, data: items, count: items.length });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

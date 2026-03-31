@@ -1,13 +1,16 @@
 import { memo } from 'react'
 import type { FeedRecord } from '../../types/scraper'
 import { formatDate } from '../../utils/formatters'
+import FeedItemsPanel from './FeedItemsPanel'
 
 interface FeedCardProps {
   feed: FeedRecord
   isScraping: boolean
+  isExpanded: boolean
   onToggle: (feedId: string, active: boolean) => void
   onScrapeNow: (feedId: string) => void
   onDelete: (feedId: string) => void
+  onToggleExpand: (feedId: string) => void
 }
 
 const INTERVAL_LABELS: Record<number, string> = {
@@ -48,12 +51,12 @@ function StatusDot({ active, scraping }: { active: boolean; scraping: boolean })
   )
 }
 
-function FeedCard({ feed, isScraping, onToggle, onScrapeNow, onDelete }: FeedCardProps) {
+function FeedCard({ feed, isScraping, isExpanded, onToggle, onScrapeNow, onDelete, onToggleExpand }: FeedCardProps) {
   const truncatedUrl = feed.url.length > 50 ? feed.url.slice(0, 47) + '…' : feed.url
 
   return (
     <article
-      className="group rounded-lg border border-(--border) bg-(--surface) transition-all duration-150 hover:border-(--accent)/40 hover:bg-(--surface-hover)"
+      className="group rounded-lg border border-(--border) bg-(--surface) transition-all duration-150 hover:border-(--accent)/40"
       aria-label={`Feed: ${feed.name}`}
     >
       <div className="flex items-start gap-3 px-4 py-3.5">
@@ -73,9 +76,18 @@ function FeedCard({ feed, isScraping, onToggle, onScrapeNow, onDelete }: FeedCar
               {getIntervalLabel(feed.interval_minutes)}
             </span>
             {typeof feed.item_count === 'number' && (
-              <span className="font-mono-accent rounded border border-(--border) bg-(--surface-elevated) px-1.5 py-0.5 text-[10px] text-(--text-faint)">
-                {feed.item_count} item{feed.item_count === 1 ? '' : 's'}
-              </span>
+              <button
+                type="button"
+                onClick={() => onToggleExpand(feed.feed_id)}
+                className={`font-mono-accent rounded border px-1.5 py-0.5 text-[10px] transition-all duration-150 cursor-pointer ${
+                  isExpanded
+                    ? 'border-(--accent)/40 bg-(--accent-soft) text-(--accent) font-semibold'
+                    : 'border-(--border) bg-(--surface-elevated) text-(--text-faint) hover:border-(--accent)/30 hover:text-(--accent)'
+                }`}
+                title={isExpanded ? 'Hide items' : 'View scraped items'}
+              >
+                {feed.item_count} item{feed.item_count === 1 ? '' : 's'} {isExpanded ? '▾' : '▸'}
+              </button>
             )}
           </div>
 
@@ -143,6 +155,13 @@ function FeedCard({ feed, isScraping, onToggle, onScrapeNow, onDelete }: FeedCar
           </button>
         </div>
       </div>
+
+      {/* Expandable items panel */}
+      {isExpanded && (
+        <div className="border-t border-(--border)">
+          <FeedItemsPanel feedId={feed.feed_id} feedName={feed.name} />
+        </div>
+      )}
     </article>
   )
 }
