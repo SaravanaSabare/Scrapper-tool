@@ -1,6 +1,7 @@
 ﻿import express from 'express';
 import { Job, Notice } from '../models/index.js';
 import { ScraperService } from '../scrapers/index.js';
+import { deepScrapeUrl } from '../services/deep-scraper.js';
 
 const router = express.Router();
 
@@ -55,6 +56,21 @@ router.post('/scrape', async (req, res) => {
     const result = await ScraperService.scrapeAndSave();
     res.json({ success: true, message: 'Default scrape completed', data: result });
   } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/jobs/deep-scrape — follow a URL and extract full article content
+router.post('/deep-scrape', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url || !url.trim()) {
+      return res.status(400).json({ success: false, error: 'url is required' });
+    }
+    const result = await deepScrapeUrl(url.trim());
+    res.json({ success: true, data: result });
+  } catch (err) {
+    console.error('Deep scrape error:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });

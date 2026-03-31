@@ -15,6 +15,7 @@ import jobRoutes from './routes/jobs.js';
 import notificationRoutes from './routes/notifications.js';
 import feedRoutes from './routes/feeds.js';
 import researchRoutes from './routes/research.js';
+import analyticsRoutes from './routes/analytics.js';
 
 const app = express();
 
@@ -56,11 +57,19 @@ const scrapeLimiter = rateLimit({
 });
 app.use('/api/jobs/scrape', scrapeLimiter);
 
+const deepScrapeLimiter = rateLimit({
+  windowMs: 60_000, max: 5,
+  standardHeaders: true, legacyHeaders: false,
+  message: { success: false, error: 'Deep scrape rate limit reached. Wait 1 minute.' },
+});
+app.use('/api/jobs/deep-scrape', deepScrapeLimiter);
+
 // Routes
 app.use('/api/jobs', jobRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/feeds', feedRoutes);
 app.use('/api/research', researchRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Health
 app.get('/api/health', async (_req, res) => {

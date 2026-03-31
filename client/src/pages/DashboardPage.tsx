@@ -1,4 +1,5 @@
 import StatCard from '../components/ui/StatCard.tsx'
+import AnalyticsPanel from '../components/analytics/AnalyticsPanel.tsx'
 import type { ScrapeStats, FeedRecord } from '../types/scraper'
 import { formatDate } from '../utils/formatters'
 
@@ -18,10 +19,11 @@ const PIPELINE_STEPS = [
 ]
 
 const QUICK_LINKS = [
-  { label: 'API Health',   href: 'http://localhost:5000/api/health',        icon: '◎' },
-  { label: 'All Items',    href: 'http://localhost:5000/api/jobs',          icon: '▤' },
-  { label: 'All Notices',  href: 'http://localhost:5000/api/notifications', icon: '▣' },
-  { label: 'All Feeds',    href: 'http://localhost:5000/api/feeds',         icon: '📡' },
+  { label: 'API Health',   href: '/api/health',        icon: '◎' },
+  { label: 'All Items',    href: '/api/jobs',           icon: '▤' },
+  { label: 'All Notices',  href: '/api/notifications',  icon: '▣' },
+  { label: 'All Feeds',    href: '/api/feeds',          icon: '📡' },
+  { label: 'Analytics',    href: '/api/analytics',      icon: '📊' },
 ]
 
 export default function DashboardPage({ stats, itemsCount, noticesCount, feeds }: DashboardPageProps) {
@@ -96,6 +98,9 @@ export default function DashboardPage({ stats, itemsCount, noticesCount, feeds }
           </div>
         </section>
       )}
+
+      {/* Analytics */}
+      {!isEmpty && <AnalyticsPanel />}
 
       {/* Pipeline step flow */}
       <section className="rounded-lg border border-(--border) bg-(--surface) p-6">

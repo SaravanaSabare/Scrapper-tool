@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback } from 'react'
 import ItemCard from '../components/items/ItemCard.tsx'
 import ItemDrawer from '../components/items/ItemDrawer.tsx'
+import DeepScrapeDrawer from '../components/items/DeepScrapeDrawer.tsx'
 import EmptyState from '../components/ui/EmptyState.tsx'
 import SearchInput from '../components/ui/SearchInput.tsx'
 import { exportItemsCsv } from '../utils/exportCsv'
@@ -23,6 +24,7 @@ export default function ItemsPage({ items, feeds, onRemoveItem, onClearAll, onOp
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [sortKey, setSortKey]               = useState<SortKey>('newest')
   const [selectedItem, setSelectedItem]     = useState<ItemRecord | null>(null)
+  const [deepScrapeUrl, setDeepScrapeUrl]   = useState<string | null>(null)
 
   // Build feed lookup: feed_id ? name
   const feedMap = useMemo(() => {
@@ -96,7 +98,7 @@ export default function ItemsPage({ items, feeds, onRemoveItem, onClearAll, onOp
       {items.length > 0 && (
         <div className="flex items-center justify-between rounded-md border border-(--border) bg-(--surface-elevated) px-4 py-2.5">
           <span className="font-mono-accent text-xs text-(--text-faint)">
-            ?? Session — <strong className="text-(--text-muted)">{items.length} item{items.length === 1 ? '' : 's'}</strong> loaded.
+            ?? Session ï¿½ <strong className="text-(--text-muted)">{items.length} item{items.length === 1 ? '' : 's'}</strong> loaded.
             &nbsp;Not saved. Refresh page to start over.
           </span>
           <div className="flex items-center gap-2">
@@ -187,7 +189,7 @@ export default function ItemsPage({ items, feeds, onRemoveItem, onClearAll, onOp
             </select>
           )}
 
-          <SearchInput value={query} onChange={setQuery} placeholder="Search items, tags…" />
+          <SearchInput value={query} onChange={setQuery} placeholder="Search items, tagsï¿½" />
 
           {filtered.length > 0 && (
             <button
@@ -221,16 +223,29 @@ export default function ItemsPage({ items, feeds, onRemoveItem, onClearAll, onOp
                   feedName={item.feed_id ? feedMap[item.feed_id] : undefined}
                   onClick={() => setSelectedItem(item)}
                 />
-                {/* Remove button — appears on hover */}
-                {onRemoveItem && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleRemove(id) }}
-                    title="Remove from session"
-                    className="absolute right-2 top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-(--border) bg-(--surface-elevated) font-mono-accent text-[10px] text-(--text-faint) opacity-0 transition-all group-hover:opacity-100 hover:border-(--danger)/40 hover:text-(--danger)"
-                  >
-                    ?
-                  </button>
-                )}
+                {/* Hover action buttons */}
+                <div className="absolute right-2 top-2 z-10 flex items-center gap-1 opacity-0 transition-all group-hover:opacity-100">
+                  {/* Deep scrape */}
+                  {item.link && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeepScrapeUrl(item.link!) }}
+                      title="Deep scrape â€” extract full content"
+                      className="flex h-5 w-5 items-center justify-center rounded-full border border-(--border) bg-(--surface-elevated) font-mono-accent text-[10px] text-(--text-faint) hover:border-(--accent)/40 hover:text-(--accent)"
+                    >
+                      ðŸ”¬
+                    </button>
+                  )}
+                  {/* Remove */}
+                  {onRemoveItem && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleRemove(id) }}
+                      title="Remove from session"
+                      className="flex h-5 w-5 items-center justify-center rounded-full border border-(--border) bg-(--surface-elevated) font-mono-accent text-[10px] text-(--text-faint) hover:border-(--danger)/40 hover:text-(--danger)"
+                    >
+                      âœ•
+                    </button>
+                  )}
+                </div>
               </div>
             )
           })}
@@ -241,6 +256,12 @@ export default function ItemsPage({ items, feeds, onRemoveItem, onClearAll, onOp
         item={selectedItem}
         onClose={() => setSelectedItem(null)}
         onDelete={selectedItem ? () => handleRemove(selectedItem.item_id ?? (selectedItem as any).id) : undefined}
+        onDeepScrape={(url) => { setSelectedItem(null); setDeepScrapeUrl(url) }}
+      />
+
+      <DeepScrapeDrawer
+        url={deepScrapeUrl}
+        onClose={() => setDeepScrapeUrl(null)}
       />
     </div>
   )

@@ -6,9 +6,10 @@ interface ItemDrawerProps {
   item: ItemRecord | null
   onClose: () => void
   onDelete?: (id: string) => void
+  onDeepScrape?: (url: string) => void
 }
 
-function ItemDrawer({ item, onClose, onDelete }: ItemDrawerProps) {
+function ItemDrawer({ item, onClose, onDelete, onDeepScrape }: ItemDrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null)
 
   // Close on Escape
@@ -110,14 +111,24 @@ function ItemDrawer({ item, onClose, onDelete }: ItemDrawerProps) {
 
           {/* Link */}
           {item.link && (
-            <a
-              href={item.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-md border border-(--accent)/30 bg-(--accent-soft) px-3 py-2 font-mono-accent text-xs text-(--accent) transition hover:bg-(--accent)/20"
-            >
-              ↗ Open source link
-            </a>
+            <div className="flex flex-wrap items-center gap-2">
+              <a
+                href={item.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-md border border-(--accent)/30 bg-(--accent-soft) px-3 py-2 font-mono-accent text-xs text-(--accent) transition hover:bg-(--accent)/20"
+              >
+                ↗ Open source link
+              </a>
+              {onDeepScrape && (
+                <button
+                  onClick={() => { onDeepScrape(item.link!); onClose() }}
+                  className="inline-flex items-center gap-2 rounded-md border border-(--border) bg-(--surface-elevated) px-3 py-2 font-mono-accent text-xs text-(--text-faint) transition hover:border-(--accent)/40 hover:text-(--accent)"
+                >
+                  🔬 Deep scrape
+                </button>
+              )}
+            </div>
           )}
 
           {/* Description */}
